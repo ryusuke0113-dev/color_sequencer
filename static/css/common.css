@@ -1,0 +1,63 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "Consolas", "Menlo", "Hiragino Sans", "Meiryo", monospace;
+  /* ダブルタップでの拡大を止め、素早いタップを操作として受け取る */
+  touch-action: manipulation;
+}
+
+/* SMPTEカラーバー。上段67%・中段8%・下段25%を3枚の背景で重ねる */
+.smpte {
+  background:
+    linear-gradient(
+        to right,
+        #c0c0c0 0 14.2857%,
+        #c0c000 0 28.5714%,
+        #00c0c0 0 42.8571%,
+        #00c000 0 57.1429%,
+        #c000c0 0 71.4286%,
+        #c00000 0 85.7143%,
+        #0000c0 0
+      )
+      top / 100% 67% no-repeat,
+    linear-gradient(
+        to right,
+        #0000c0 0 14.2857%,
+        #131313 0 28.5714%,
+        #c000c0 0 42.8571%,
+        #131313 0 57.1429%,
+        #00c0c0 0 71.4286%,
+        #131313 0 85.7143%,
+        #c0c0c0 0
+      )
+      top / 100% 75% no-repeat,
+    linear-gradient(
+      to right,
+      #00214c 0 17.8571%,
+      #ffffff 0 35.7143%,
+      #32006a 0 53.5714%,
+      #131313 0 71.4286%,
+      #090909 0 76.1905%,
+      #131313 0 80.9524%,
+      #1d1d1d 0 85.7143%,
+      #131313 0
+    );
+}
+
+/* 未アサイン。暗い背景に左下から右上への赤い斜線 */
+.unassigned {
+  background: linear-gradient(
+    to bottom right,
+    #161c20 calc(50% - 1.5px),
+    #d42a3a calc(50% - 1.5px) calc(50% + 1.5px),
+    #161c20 calc(50% + 1.5px)
+  );
+}

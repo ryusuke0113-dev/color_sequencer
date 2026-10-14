@@ -1,0 +1,47 @@
+body {
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+}
+
+/* どんな背景色でも読めるように、文字に縁取りの影をつける */
+.overlay {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  text-shadow:
+    0 0 2px #000,
+    0 0 4px #000;
+  pointer-events: none;
+}
+
+.offline {
+  margin-top: 4px;
+  color: #ffd84d;
+}
+
+.hint {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 13px;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+.hint.hidden {
+  opacity: 0;
+}
