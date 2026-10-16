@@ -1,22 +1,42 @@
-const { PAD_COUNT, SMPTE } = Sequencer;
+const { SMPTE, FADE_NONE, FADE_OUT, FADE_IN } = Sequencer;
 const DOUBLE_TAP_MS = 350;
 const LOCK_STORAGE_KEY = "oz9-lock";
 
 const consoleView = document.getElementById("console");
 const statusLine = document.getElementById("status");
 const paletteView = document.getElementById("palette");
-const monitor = document.getElementById("monitor");
-const padsView = document.getElementById("pads");
+const monitorsView = document.getElementById("monitors");
+const pagePadsView = document.getElementById("page-pads");
 const runButton = document.getElementById("run-button");
 const switchButton = document.getElementById("switch-button");
 const lockInput = document.getElementById("lock");
-const qrLink = document.getElementById("qr-link");
-const picker = document.getElementById("picker");
 const menu = document.getElementById("menu");
 const toastView = document.getElementById("toast");
+const colorPanel = document.getElementById("color-panel");
+const colorPreview = document.getElementById("color-preview");
+const colorHex = document.getElementById("color-hex");
+const sliderH = document.getElementById("slider-h");
+const sliderS = document.getElementById("slider-s");
+const sliderL = document.getElementById("slider-l");
+const valH = document.getElementById("val-h");
+const valS = document.getElementById("val-s");
+const valL = document.getElementById("val-l");
 
 let schedule = null;
+// 選択は { page, pad } のキー "p-i"
 let selected = new Set();
+let onColorConfirm = null;
+let menuTarget = null;
+let menuPosition = { x: 0, y: 0 };
+
+function selKey(page, pad) {
+  return `${page}-${pad}`;
+}
+
+function parseKey(key) {
+  const [page, pad] = key.split("-").map(Number);
+  return { page, pad };
+}
 
 // ---------- 画面の部品を作る ----------
 
@@ -29,42 +49,93 @@ const swatches = Array.from({ length: PAD_COUNT }, (_, i) => {
   return swatch;
 });
 
-const pads = Array.from({ length: PAD_COUNT }, (_, i) => {
-  const pad = document.createElement("div");
-  pad.className = "pad";
-  pad.dataset.index = i;
-  const main = document.createElement("div");
-  main.className = "pad-layer pad-main";
-  const temp = document.createElement("div");
-  temp.className = "pad-layer pad-temp";
-  const label = document.createElement("span");
-  label.className = "pad-label";
-  label.textContent = Sequencer.padLabel(i);
-  pad.append(main, temp, label);
-  padsView.append(pad);
-  return { pad, main, temp };
+const monitors = Array.from({ length: PAGE_COUNT }, (_, page) => {
+  const monitor = document.createElement("div");
+  monitor.className = "monitor smpte";
+  monitor.title = `PAGE.${String(page + 1).padStart(2, "0")}`;
+  monitorsView.append(monitor);
+  return monitor;
 });
+
+const pagePads = Array.from({ length: PAGE_COUNT }, (_, page) => {
+  const row = document.createElement("div");
+  row.className = "page-row";
+  const label = document.createElement("div");
+  label.className = "page-row-label";
+  label.textContent = `P${String(page + 1).padStart(2, "0")}`;
+  const padsGrid = document.createElement("div");
+  padsGrid.className = "pads";
+  const pads = Array.from({ length: PAD_COUNT }, (_, i) => {
+    const pad = document.createElement("div");
+    pad.className = "pad";
+    pad.dataset.page = page;
+    pad.dataset.index = i;
+    const main = document.createElement("div");
+    main.className = "pad-main";
+    const temp = document.createElement("div");
+    temp.className = "pad-temp";
+    const padLabel = document.createElement("span");
+    padLabel.className = "pad-label";
+    padLabel.textContent = Sequencer.padLabel(i);
+    pad.append(main, temp, padLabel);
+    padsGrid.append(pad);
+    return { pad, main, temp };
+  });
+  row.append(label, padsGrid);
+  pagePadsView.append(row);
+  return pads;
+});
+
+const swLockInputs = [...document.querySelectorAll(".sw-lock-input")];
+const qrLinks = [...document.querySelectorAll("a.qr")];
+
+function pageAt(page) {
+  return schedule?.pages?.[page];
+}
+
+function pageScheduleView(page) {
+  const p = pageAt(page);
+  if (!schedule || !p) return null;
+  return {
+    state: schedule.state,
+    t0: schedule.t0,
+    colors: p.colors,
+    prev_colors: p.prev_colors,
+    fades: p.fades,
+    prev_fades: p.prev_fades,
+  };
+}
 
 // ---------- schedule を画面に反映する ----------
 
 function renderSchedule() {
-  if (!schedule) return;
+  if (!schedule?.pages) return;
   schedule.palette.forEach((value, i) => Sequencer.paint(swatches[i], value));
-  pads.forEach(({ main, temp }, i) => {
-    Sequencer.paint(main, schedule.colors[i]);
-    const tempValue = schedule.temp_colors[i];
-    temp.hidden = tempValue === null;
-    if (tempValue !== null) Sequencer.paint(temp, tempValue);
+  pagePads.forEach((pads, page) => {
+    const p = pageAt(page);
+    pads.forEach(({ pad, main, temp }, i) => {
+      Sequencer.paint(main, p.colors[i]);
+      const tempValue = p.temp_colors[i];
+      temp.hidden = tempValue === null;
+      if (tempValue !== null) Sequencer.paint(temp, tempValue);
+      pad.classList.toggle("fade-in", p.fades[i] === FADE_IN);
+      pad.classList.toggle("fade-out", p.fades[i] === FADE_OUT);
+    });
+    swLockInputs[page].checked = !!p.switch_lock;
   });
   renderSelection();
 }
 
 function renderSelection() {
-  pads.forEach(({ pad }, i) => pad.classList.toggle("selected", selected.has(i)));
+  pagePads.forEach((pads, page) => {
+    pads.forEach(({ pad }, i) => {
+      pad.classList.toggle("selected", selected.has(selKey(page, i)));
+    });
+  });
 }
 
-function setSelection(indices) {
-  selected = new Set(indices);
+function setSelection(keys) {
+  selected = new Set(keys);
   renderSelection();
 }
 
@@ -106,69 +177,140 @@ function isRunning() {
   return schedule?.state === "run";
 }
 
-// 同じ要素を短い間隔で2回押したら true（ダブルクリック・ダブルタップ共通）
 function makeDoubleTapDetector() {
-  let last = { index: -1, time: 0 };
-  return (index) => {
+  let last = { key: "", time: 0 };
+  return (key) => {
     const time = performance.now();
-    const isDouble = last.index === index && time - last.time < DOUBLE_TAP_MS;
-    last = isDouble ? { index: -1, time: 0 } : { index, time };
+    const isDouble = last.key === key && time - last.time < DOUBLE_TAP_MS;
+    last = isDouble ? { key: "", time: 0 } : { key, time };
     return isDouble;
   };
 }
 
-// 右クリックしたパッドが選択中なら選択中のパッド全部、そうでなければそのパッドだけ
-function targetPads(index) {
-  return selected.has(index) ? [...selected] : [index];
+function targetPadsOnPage(page, padIndex) {
+  const onPage = [...selected]
+    .map(parseKey)
+    .filter((t) => t.page === page)
+    .map((t) => t.pad);
+  if (onPage.includes(padIndex) && onPage.length > 0) return onPage;
+  return [padIndex];
+}
+
+function canFadeColor(value) {
+  return typeof value === "string" && value !== SMPTE;
 }
 
 // ---------- アサイン ----------
 
-// RUN中は仮アサイン、停止中は本アサインとして保存する
-function assign(indices, value) {
+function assign(page, indices, value) {
   if (!schedule || indices.length === 0) return;
   if (isLocked()) {
     showToast("LOCK中はアサインできません");
     return;
   }
-  const colors = [...schedule.colors];
-  const tempColors = [...schedule.temp_colors];
+  const p = pageAt(page);
+  const colors = [...p.colors];
+  const tempColors = [...p.temp_colors];
+  const fades = [...p.fades];
   for (const i of indices) {
     if (isRunning()) tempColors[i] = value;
-    else colors[i] = value;
+    else {
+      colors[i] = value;
+      if (!canFadeColor(value)) fades[i] = FADE_NONE;
+    }
   }
-  send("/api/console/pads", { colors, temp_colors: tempColors });
+  send("/api/console/pads", {
+    page,
+    colors,
+    temp_colors: tempColors,
+    fades,
+  });
 }
 
-function cancelTemp(indices) {
+function cancelTemp(page, indices) {
   if (isLocked()) {
     showToast("LOCK中はアサインできません");
     return;
   }
-  const tempColors = [...schedule.temp_colors];
+  const tempColors = [...pageAt(page).temp_colors];
   for (const i of indices) tempColors[i] = null;
-  send("/api/console/pads", { temp_colors: tempColors });
+  send("/api/console/pads", { page, temp_colors: tempColors });
 }
 
-// ---------- カラーピッカー ----------
-
-let onPick = null;
-
-function openPicker(initialValue, x, y, callback) {
-  onPick = callback;
-  picker.value = initialValue && initialValue !== SMPTE ? initialValue.toLowerCase() : "#ffffff";
-  picker.style.left = `${x}px`;
-  picker.style.top = `${y}px`;
-  try {
-    picker.showPicker();
-  } catch {
-    picker.click();
+function setFades(page, indices, mode) {
+  if (!schedule || indices.length === 0) return;
+  if (isLocked()) {
+    showToast("LOCK中はアサインできません");
+    return;
   }
+  const p = pageAt(page);
+  const fades = [...p.fades];
+  let changed = false;
+  for (const i of indices) {
+    if (!canFadeColor(p.colors[i])) continue;
+    fades[i] = fades[i] === mode ? FADE_NONE : mode;
+    changed = true;
+  }
+  if (!changed) {
+    showToast("カラーコードのパッドだけフェードできます");
+    return;
+  }
+  send("/api/console/pads", { page, fades });
 }
 
-picker.addEventListener("change", () => {
-  onPick?.(picker.value.toUpperCase());
-  onPick = null;
+// ---------- HSLスライダー ----------
+
+function currentHexFromSliders() {
+  return Sequencer.hslToHex(
+    Number(sliderH.value) / 360,
+    Number(sliderS.value) / 100,
+    Number(sliderL.value) / 100,
+  );
+}
+
+function updateColorPanelPreview() {
+  const hex = currentHexFromSliders();
+  colorPreview.style.backgroundColor = hex;
+  colorHex.textContent = hex;
+  valH.textContent = sliderH.value;
+  valS.textContent = sliderS.value;
+  valL.textContent = sliderL.value;
+}
+
+function openColorPanel(initialValue, x, y, callback) {
+  const hex =
+    initialValue && initialValue !== SMPTE ? initialValue.toUpperCase() : "#FFFFFF";
+  const { h, s, l } = Sequencer.hexToHsl(hex);
+  sliderH.value = Math.round(h * 360);
+  sliderS.value = Math.round(s * 100);
+  sliderL.value = Math.round(l * 100);
+  onColorConfirm = callback;
+  updateColorPanelPreview();
+  colorPanel.hidden = false;
+  const { width, height } = colorPanel.getBoundingClientRect();
+  colorPanel.style.left = `${Math.min(x, window.innerWidth - width - 8)}px`;
+  colorPanel.style.top = `${Math.min(y, window.innerHeight - height - 8)}px`;
+}
+
+function closeColorPanel() {
+  colorPanel.hidden = true;
+  onColorConfirm = null;
+}
+
+[sliderH, sliderS, sliderL].forEach((el) => {
+  el.addEventListener("input", updateColorPanelPreview);
+});
+
+colorPanel.addEventListener("click", (event) => {
+  const action = event.target.dataset.action;
+  if (action === "cancel") {
+    closeColorPanel();
+  } else if (action === "ok") {
+    const hex = currentHexFromSliders();
+    const callback = onColorConfirm;
+    closeColorPanel();
+    callback?.(hex);
+  }
 });
 
 // ---------- パレット ----------
@@ -178,21 +320,31 @@ const isPaletteDoubleTap = makeDoubleTapDetector();
 swatches.forEach((swatch, i) => {
   swatch.addEventListener("click", (event) => {
     if (!schedule) return;
-    if (isPaletteDoubleTap(i)) {
+    if (isPaletteDoubleTap(`pal-${i}`)) {
       if (schedule.palette[i] === SMPTE) {
         showToast("SMPTEカラーバーは編集できません");
         return;
       }
-      openPicker(schedule.palette[i], event.clientX, event.clientY, (value) => {
+      openColorPanel(schedule.palette[i], event.clientX, event.clientY, (value) => {
         const palette = [...schedule.palette];
         palette[i] = value;
         send("/api/console/palette", { palette });
       });
       return;
     }
-    // パッドを選んでからパレットを押すとアサイン（スマートフォン向けの操作）
     if (selected.size > 0) {
-      assign([...selected], schedule.palette[i]);
+      // 選択は同一ページ内のみまとめてアサイン
+      const items = [...selected].map(parseKey);
+      const page = items[0].page;
+      if (items.every((t) => t.page === page)) {
+        assign(
+          page,
+          items.map((t) => t.pad),
+          schedule.palette[i],
+        );
+      } else {
+        showToast("複数ページにまたがる選択にはまとめてアサインできません");
+      }
       setSelection([]);
     }
   });
@@ -208,62 +360,65 @@ swatches.forEach((swatch, i) => {
 const isPadDoubleTap = makeDoubleTapDetector();
 let selectionBeforeTap = new Set();
 
-pads.forEach(({ pad }, i) => {
-  pad.addEventListener("click", (event) => {
-    if (event.shiftKey) {
-      const next = new Set(selected);
-      next.has(i) ? next.delete(i) : next.add(i);
-      setSelection(next);
-      return;
-    }
-    // ダブルタップ（ダブルクリック）は Shift と同じく複数選択に追加する
-    if (isPadDoubleTap(i)) {
-      setSelection([...selectionBeforeTap, i]);
-      return;
-    }
-    selectionBeforeTap = new Set(selected);
-    setSelection([i]);
-  });
+pagePads.forEach((pads, page) => {
+  pads.forEach(({ pad }, i) => {
+    pad.addEventListener("click", (event) => {
+      const key = selKey(page, i);
+      if (event.shiftKey) {
+        const next = new Set(selected);
+        next.has(key) ? next.delete(key) : next.add(key);
+        setSelection(next);
+        return;
+      }
+      if (isPadDoubleTap(key)) {
+        setSelection([...selectionBeforeTap, key]);
+        return;
+      }
+      selectionBeforeTap = new Set(selected);
+      setSelection([key]);
+    });
 
-  pad.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    pad.classList.add("drop-target");
-  });
+    pad.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      pad.classList.add("drop-target");
+    });
 
-  pad.addEventListener("dragleave", () => pad.classList.remove("drop-target"));
+    pad.addEventListener("dragleave", () => pad.classList.remove("drop-target"));
 
-  pad.addEventListener("drop", (event) => {
-    event.preventDefault();
-    pad.classList.remove("drop-target");
-    const paletteIndex = Number(event.dataTransfer.getData("text/plain"));
-    if (!schedule || Number.isNaN(paletteIndex)) return;
-    assign(targetPads(i), schedule.palette[paletteIndex]);
-    setSelection([]);
-  });
+    pad.addEventListener("drop", (event) => {
+      event.preventDefault();
+      pad.classList.remove("drop-target");
+      const paletteIndex = Number(event.dataTransfer.getData("text/plain"));
+      if (!schedule || Number.isNaN(paletteIndex)) return;
+      assign(page, targetPadsOnPage(page, i), schedule.palette[paletteIndex]);
+      setSelection([]);
+    });
 
-  pad.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    if (!schedule) return;
-    if (isLocked()) {
-      showToast("LOCK中はアサインできません");
-      return;
-    }
-    openMenu(i, event.clientX, event.clientY);
+    pad.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (!schedule) return;
+      if (isLocked()) {
+        showToast("LOCK中はアサインできません");
+        return;
+      }
+      openMenu(page, i, event.clientX, event.clientY);
+    });
   });
 });
 
 // ---------- 右クリックメニュー ----------
 
-let menuPad = null;
-let menuPosition = { x: 0, y: 0 };
-
-function openMenu(index, x, y) {
-  menuPad = index;
+function openMenu(page, index, x, y) {
+  menuTarget = { page, index };
   menuPosition = { x, y };
+  const p = pageAt(page);
+  const hasColor = canFadeColor(p.colors[index]);
   menu.querySelector('[data-action="delete"]').hidden =
-    isRunning() || schedule.colors[index] === null;
-  menu.querySelector('[data-action="cancel-temp"]').hidden = schedule.temp_colors[index] === null;
+    isRunning() || p.colors[index] === null;
+  menu.querySelector('[data-action="cancel-temp"]').hidden = p.temp_colors[index] === null;
+  menu.querySelector('[data-action="fade-out"]').hidden = !hasColor;
+  menu.querySelector('[data-action="fade-in"]').hidden = !hasColor;
   menu.hidden = false;
   const { width, height } = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(x, window.innerWidth - width - 8)}px`;
@@ -272,49 +427,63 @@ function openMenu(index, x, y) {
 
 function closeMenu() {
   menu.hidden = true;
-  menuPad = null;
+  menuTarget = null;
 }
 
 menu.addEventListener("click", (event) => {
   const action = event.target.dataset.action;
-  if (!action || menuPad === null) return;
-  const index = menuPad;
-  const targets = targetPads(index);
+  if (!action || !menuTarget) return;
+  const { page, index } = menuTarget;
+  const targets = targetPadsOnPage(page, index);
+  const p = pageAt(page);
   closeMenu();
 
   if (action === "edit") {
     const current = isRunning()
-      ? (schedule.temp_colors[index] ?? schedule.colors[index])
-      : schedule.colors[index];
-    openPicker(current, menuPosition.x, menuPosition.y, (value) => assign(targets, value));
+      ? (p.temp_colors[index] ?? p.colors[index])
+      : p.colors[index];
+    if (current === SMPTE) {
+      showToast("SMPTEカラーバーは編集できません");
+      return;
+    }
+    openColorPanel(current, menuPosition.x, menuPosition.y, (value) =>
+      assign(page, targets, value),
+    );
+  } else if (action === "fade-out") {
+    setFades(page, targets, FADE_OUT);
+  } else if (action === "fade-in") {
+    setFades(page, targets, FADE_IN);
   } else if (action === "delete") {
-    assign(targets, null);
+    assign(page, targets, null);
   } else if (action === "cancel-temp") {
-    cancelTemp(targets);
+    cancelTemp(page, targets);
   }
   setSelection([]);
 });
 
-// パッド・パレット・メニュー以外を押したら選択とメニューを解除する
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".menu")) closeMenu();
-  if (!event.target.closest(".pad, .swatch, .menu")) setSelection([]);
+  if (!event.target.closest(".pad, .swatch, .menu, .color-panel")) setSelection([]);
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeMenu();
+    closeColorPanel();
     setSelection([]);
   }
 });
 
-// ---------- RUN / SWITCH / LOCK ----------
+// ---------- RUN / SWITCH / LOCK / sw Lock ----------
 
 function switchBlockReason(t) {
   if (isLocked()) return "LOCK中はSWITCHできません";
   if (!isRunning()) return "SWITCHはRUN中だけ使えます";
   if (t < schedule.t0) return "切り替え待ちです";
-  if (schedule.temp_colors.every((v) => v === null)) return "仮アサインがありません";
+  const can = schedule.pages.some(
+    (p) => !p.switch_lock && p.temp_colors.some((v) => v !== null),
+  );
+  if (!can) return "SWITCHできるページがありません";
   return null;
 }
 
@@ -347,13 +516,22 @@ lockInput.addEventListener("change", () => {
   localStorage.setItem(LOCK_STORAGE_KEY, lockInput.checked ? "1" : "0");
 });
 
+swLockInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    const page = Number(input.dataset.page);
+    send("/api/console/switch-lock", {
+      page,
+      switch_lock: input.checked,
+    });
+  });
+});
+
 // ---------- QRコード ----------
 
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    // HTTPS でない場合は clipboard API が使えないので、昔ながらの方法でコピーする
     const area = document.createElement("textarea");
     area.value = text;
     document.body.append(area);
@@ -363,50 +541,67 @@ async function copyText(text) {
   }
 }
 
-// クリックでURLをコピー。スマートフォンの長押しはブラウザ標準のメニュー（画像の保存・リンクのコピー）
-qrLink.addEventListener("click", async (event) => {
-  event.preventDefault();
-  await copyText(AUDIENCE_URL);
-  showToast("audienceのURLをコピーしました");
+qrLinks.forEach((link) => {
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const page = Number(link.dataset.page);
+    await copyText(AUDIENCE_URLS[page]);
+    showToast(`PAGE.${String(page + 1).padStart(2, "0")} のURLをコピーしました`);
+  });
 });
 
 // ---------- 毎フレームの描画 ----------
 
-let lastCurrentPad = -1;
 let lastStatus = "";
-let lastMonitorValue;
+const lastMonitorValues = Array(PAGE_COUNT).fill(undefined);
+const lastCurrentPads = Array(PAGE_COUNT).fill(-1);
 
 function render() {
   const t = Sequencer.now();
-  const frame = Sequencer.frameAt(schedule, t);
-  const value = frame.kind === "standby" ? SMPTE : frame.value;
+  let statusFrame = { kind: "standby" };
 
-  if (value !== lastMonitorValue) {
-    Sequencer.paint(monitor, value);
-    lastMonitorValue = value;
+  for (let page = 0; page < PAGE_COUNT; page++) {
+    const view = pageScheduleView(page);
+    const frame = Sequencer.frameAt(view, t);
+    if (page === 0) statusFrame = frame;
+    const value = frame.kind === "standby" ? SMPTE : frame.value;
+    if (value !== lastMonitorValues[page]) {
+      Sequencer.paint(monitors[page], value);
+      lastMonitorValues[page] = value;
+    }
+    const currentPad = frame.kind === "pad" ? frame.pad : -1;
+    if (currentPad !== lastCurrentPads[page]) {
+      pagePads[page].forEach(({ pad }, i) => {
+        pad.classList.toggle("current", i === currentPad);
+      });
+      lastCurrentPads[page] = currentPad;
+    }
   }
 
-  const text = Sequencer.statusText(frame, t);
+  const text = Sequencer.statusText(statusFrame, t);
   if (text !== lastStatus) {
     statusLine.textContent = text;
     lastStatus = text;
   }
 
-  const currentPad = frame.kind === "pad" ? frame.pad : -1;
-  if (currentPad !== lastCurrentPad) {
-    pads.forEach(({ pad }, i) => pad.classList.toggle("current", i === currentPad));
-    lastCurrentPad = currentPad;
-  }
-
-  // RUNボタンはパッドの動きに合わせて点滅する
   const running = isRunning();
   runButton.classList.toggle("running", running);
-  runButton.classList.toggle("blink", running && frame.kind === "pad" && frame.step % 2 === 0);
+  runButton.classList.toggle(
+    "blink",
+    running && statusFrame.kind === "pad" && statusFrame.step % 2 === 0,
+  );
   runButton.classList.toggle("disabled", isLocked());
 
-  const pending = running && schedule.prev_colors !== null && t < schedule.t0;
+  const pending =
+    running &&
+    schedule?.t0 != null &&
+    t < schedule.t0 &&
+    schedule.pages?.some((p) => p.prev_colors !== null);
   switchButton.classList.toggle("pending", pending);
-  switchButton.classList.toggle("disabled", !pending && schedule !== null && switchBlockReason(t) !== null);
+  switchButton.classList.toggle(
+    "disabled",
+    !pending && schedule !== null && switchBlockReason(t) !== null,
+  );
 
   consoleView.classList.toggle("locked", isLocked());
 

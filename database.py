@@ -36,14 +36,14 @@ def init_db():
 
 def create_user(email, password_hash):
     """新しいアカウントを作り id を返す。メールアドレスが登録済みなら None。"""
-    audience_id = secrets.token_urlsafe(8)
-    schedule = json.dumps(sequence.new_schedule())
+    audience_ids = [secrets.token_urlsafe(8) for _ in range(sequence.PAGE_COUNT)]
+    schedule = json.dumps(sequence.new_schedule(audience_ids))
     try:
         with closing(_connect()) as conn, conn:
             cursor = conn.execute(
                 "INSERT INTO users (email, password_hash, audience_id, schedule)"
                 " VALUES (?, ?, ?, ?)",
-                (email, password_hash, audience_id, schedule),
+                (email, password_hash, audience_ids[0], schedule),
             )
             return cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -66,18 +66,42 @@ def find_user_by_email(email):
 
 
 def find_user_by_audience_id(audience_id):
-    return _find_user("audience_id", audience_id)
+    """3ページいずれかの audience_id に一致するユーザーを返す。"""
+    with closing(_connect()) as conn:
+        # まず旧形式の列を確認
+        row = conn.execute(
+            "SELECT * FROM users WHERE audience_id = ?", (audience_id,)
+        ).fetchone()
+        if row is not None:
+            return row
+        # 新形式：schedule 内の pages を探す
+        for user in conn.execute("SELECT * FROM users"):
+            schedule = sequence.ensure_schedule(json.loads(user["schedule"]))
+            if sequence.find_page_index(schedule, audience_id) is not None:
+                return user
+    return None
 
 
 def load_schedule(user):
-    return json.loads(user["schedule"])
+    schedule = sequence.ensure_schedule(json.loads(user["schedule"]))
+    # 旧アカウントの audience_id 列を page0 に揃える
+    if schedule["pages"][0]["audience_id"] != user["audience_id"]:
+        # page0 が別IDなら、列のIDが pages のどれかにあればそのまま
+        if sequence.find_page_index(schedule, user["audience_id"]) is None:
+            schedule["pages"][0]["audience_id"] = user["audience_id"]
+    return schedule
 
 
 def save_schedule(user_id, schedule):
     """版番号を+1して保存する。"""
+    sequence.ensure_schedule(schedule)
     schedule["version"] += 1
     with closing(_connect()) as conn, conn:
         conn.execute(
-            "UPDATE users SET schedule = ? WHERE id = ?",
-            (json.dumps(schedule), user_id),
+            "UPDATE users SET schedule = ?, audience_id = ? WHERE id = ?",
+            (
+                json.dumps(schedule),
+                schedule["pages"][0]["audience_id"],
+                user_id,
+            ),
         )

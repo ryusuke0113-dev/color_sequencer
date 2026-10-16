@@ -82,6 +82,10 @@ def audience_url(audience_id):
     return f"{request.scheme}://{host}" + url_for("audience", audience_id=audience_id)
 
 
+def page_urls(schedule):
+    return [audience_url(page["audience_id"]) for page in schedule["pages"]]
+
+
 # ---------- ログイン ----------
 
 
@@ -143,10 +147,14 @@ def logout():
 @login_required
 def console():
     user = current_user()
+    schedule = database.load_schedule(user)
+    urls = page_urls(schedule)
     return render_template(
         "console.html",
         email=user["email"],
-        audience_url=audience_url(user["audience_id"]),
+        audience_urls=urls,
+        page_count=sequence.PAGE_COUNT,
+        pad_count=sequence.PAD_COUNT,
     )
 
 
@@ -157,10 +165,13 @@ def audience(audience_id):
     return render_template("audience.html", audience_id=audience_id)
 
 
-@app.get("/qr.svg")
+@app.get("/qr/<int:page>.svg")
 @login_required
-def qr_code():
-    url = audience_url(current_user()["audience_id"])
+def qr_code(page):
+    if page < 0 or page >= sequence.PAGE_COUNT:
+        abort(404)
+    schedule = database.load_schedule(current_user())
+    url = audience_url(schedule["pages"][page]["audience_id"])
     image = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathFillImage, border=2)
     return Response(image.to_string(), mimetype="image/svg+xml")
 
@@ -173,21 +184,27 @@ def api_time():
     return jsonify(now=int(time.time() * 1000))
 
 
-def audience_schedule(audience_id):
+def audience_context(audience_id):
     user = database.find_user_by_audience_id(audience_id)
     if user is None:
         abort(404)
-    return database.load_schedule(user)
+    schedule = database.load_schedule(user)
+    page_index = sequence.find_page_index(schedule, audience_id)
+    if page_index is None:
+        abort(404)
+    return schedule, page_index
 
 
 @app.get("/api/audience/<audience_id>/version")
 def api_audience_version(audience_id):
-    return jsonify(version=audience_schedule(audience_id)["version"])
+    schedule, _ = audience_context(audience_id)
+    return jsonify(version=schedule["version"])
 
 
 @app.get("/api/audience/<audience_id>/schedule")
 def api_audience_schedule(audience_id):
-    return jsonify(sequence.public_view(audience_schedule(audience_id)))
+    schedule, page_index = audience_context(audience_id)
+    return jsonify(sequence.public_view(schedule, page_index))
 
 
 # ---------- API（console 用・ログイン必要） ----------
@@ -237,12 +254,26 @@ def api_switch():
     return update_schedule(lambda s, data: sequence.apply_switch(s, data.get("t0")))
 
 
+@app.post("/api/console/switch-lock")
+@login_required
+def api_switch_lock():
+    return update_schedule(
+        lambda s, data: sequence.apply_switch_lock(
+            s, data.get("page"), data.get("switch_lock")
+        )
+    )
+
+
 @app.post("/api/console/pads")
 @login_required
 def api_pads():
     return update_schedule(
         lambda s, data: sequence.apply_pads(
-            s, data.get("colors"), data.get("temp_colors")
+            s,
+            data.get("page"),
+            data.get("colors"),
+            data.get("temp_colors"),
+            data.get("fades"),
         )
     )
 
