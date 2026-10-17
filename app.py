@@ -3,6 +3,7 @@ import socket
 import time
 from datetime import timedelta
 from functools import wraps
+from pathlib import Path
 from threading import Lock
 
 import qrcode
@@ -15,6 +16,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -24,6 +26,7 @@ import database
 import sequence
 
 PASSWORD_MIN_LENGTH = 8
+IMAGES_DIR = Path(__file__).parent / "images"
 
 
 def load_secret_key():
@@ -94,6 +97,11 @@ def index():
     return redirect(url_for("console" if current_user() else "login"))
 
 
+@app.get("/images/<path:name>")
+def project_image(name):
+    return send_from_directory(IMAGES_DIR, name)
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     error = None
@@ -160,9 +168,18 @@ def console():
 
 @app.get("/audience/<audience_id>")
 def audience(audience_id):
-    if database.find_user_by_audience_id(audience_id) is None:
+    user = database.find_user_by_audience_id(audience_id)
+    if user is None:
         abort(404)
-    return render_template("audience.html", audience_id=audience_id)
+    schedule = database.load_schedule(user)
+    page_index = sequence.find_page_index(schedule, audience_id)
+    if page_index is None:
+        abort(404)
+    return render_template(
+        "audience.html",
+        audience_id=audience_id,
+        page_number=page_index + 1,
+    )
 
 
 @app.get("/qr/<int:page>.svg")
@@ -258,9 +275,7 @@ def api_switch():
 @login_required
 def api_switch_lock():
     return update_schedule(
-        lambda s, data: sequence.apply_switch_lock(
-            s, data.get("page"), data.get("switch_lock")
-        )
+        lambda s, data: sequence.apply_switch_lock(s, data.get("page"), data.get("switch_lock"))
     )
 
 

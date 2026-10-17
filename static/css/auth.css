@@ -2,9 +2,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  min-height: 100%;
+  padding: 24px;
   background: #0b0f11;
-  color: #cfd8dc;
+  color: #d7e0e2;
 }
 
 .backdrop {
@@ -13,75 +14,134 @@ body {
   opacity: 0.25;
 }
 
-.card {
+.stage {
   position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(1300px, 100%);
+  height: min(500px, calc(100vh - 48px));
+  min-height: 280px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.splash {
+  position: relative;
+  flex: 1.7;
+  min-width: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.splash img {
+  display: block;
   width: 100%;
-  max-width: 360px;
-  padding: 24px;
-  background: #161d21;
-  border: 1px solid #3a464c;
-  border-radius: 4px;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.credit {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  margin: 0;
+  color: #fff;
+  font-family: "Yu Gothic", "Hiragino Sans", "Meiryo", sans-serif;
+  font-size: 8%;
+  font-style: normal;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px #000;
+  user-select: none;
+}
+
+.card {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 18px;
+  background: #1b3334;
 }
 
 h1 {
   margin: 0;
-  font-size: 15px;
-  letter-spacing: 2px;
+  font-size: 22x;
+  font-weight: normal;
+  letter-spacing: 1px;
 }
 
 h2 {
-  margin: 4px 0 20px;
-  font-size: 13px;
+  margin: 6px 0 12px;
+  font-size: 16px;
   font-weight: normal;
-  color: #9fb3ba;
 }
 
 form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 input {
-  padding: 10px;
-  border: 1px solid #3a464c;
+  padding: 8px 10px;
+  border: none;
   border-radius: 2px;
-  background: #0f1417;
-  color: #fff;
+  background: #fff;
+  color: #111;
   font-family: inherit;
   font-size: 14px;
 }
 
 button {
-  margin-top: 6px;
-  padding: 12px;
-  border: 2px solid #3c5c5c;
-  background: #2c4f4f;
+  margin-top: 4px;
+  padding: 10px;
+  border: none;
+  background: #1a7f7c;
   color: #fff;
   font-family: inherit;
   font-size: 14px;
-  letter-spacing: 2px;
   cursor: pointer;
+}
+
+button:hover {
+  background: #166e6b;
 }
 
 .error {
   margin: 0 0 14px;
-  color: #ff6b78;
+  color: #ffb4b4;
   font-size: 12px;
 }
 
 .switch {
-  margin: 18px 0 0;
-  font-size: 12px;
+  margin: 10px 0 0;
+  font-size: 15px;
 }
 
 .switch a {
-  color: #8fd3ff;
+  color: #d7e0e2;
+}
+
+@media (max-width: 720px) {
+  .stage {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .splash {
+    height: 154px;
+    flex: none;
+  }
+
+  .card {
+    flex: none;
+  }
 }

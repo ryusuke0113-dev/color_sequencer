@@ -1,14 +1,28 @@
 body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  overflow: hidden;
   background: #0b0f11;
   color: #cfd8dc;
 }
 
+#console-fit {
+  position: relative;
+  flex: none;
+}
+
 .console {
-  max-width: 1100px;
-  margin: 24px auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1100px;
+  margin: 0;
   padding: 10px 20px 14px;
   background: #161d21;
   border-radius: 4px;
+  transform-origin: top left;
 }
 
 .console-header {
@@ -24,7 +38,7 @@ body {
 
 .console-top {
   display: grid;
-  grid-template-columns: 160px 1fr auto;
+  grid-template-columns: 160px 1fr;
   gap: 16px;
   align-items: stretch;
 }
@@ -53,8 +67,22 @@ body {
 }
 
 .monitor {
+  position: relative;
   min-height: 100px;
   border: 2px solid #000;
+}
+
+.monitor-code {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-shadow:
+    0 0 2px #000,
+    0 0 4px #000;
+  pointer-events: none;
 }
 
 .qr-row {
@@ -125,11 +153,11 @@ body {
   transition: left 0.2s;
 }
 
-.lock input:checked + .lock-switch {
+.lock input:checked+.lock-switch {
   background: #c0283a;
 }
 
-.lock input:checked + .lock-switch::after {
+.lock input:checked+.lock-switch::after {
   left: 35px;
 }
 
@@ -154,13 +182,17 @@ body {
 
 .page-row {
   display: grid;
-  grid-template-columns: 52px 1fr;
+  grid-template-columns: 72px 1fr;
   gap: 8px;
   align-items: center;
 }
 
+.sw-lock {
+  gap: 4px;
+}
+
 .page-row-label {
-  font-size: 11px;
+  font-size: 10px;
   color: #9fb3ba;
 }
 
@@ -176,6 +208,7 @@ body {
   position: relative;
   aspect-ratio: 1;
   cursor: pointer;
+  user-select: none;
 }
 
 /* 本アサイン＝奥の大きい四角。仮アサイン＝手前右下の小さい四角（重ねUI） */
@@ -183,7 +216,8 @@ body {
   position: absolute;
   inset: 0;
   border: 2px solid #000;
-  background: #0f1417;
+  /* background 一括指定だと .smpte のカラーバーが消える */
+  background-color: #0f1417;
 }
 
 .pad-temp {
@@ -254,6 +288,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.buttons .global-lock {
+  flex: 0 0 auto;
 }
 
 .run-button,
@@ -419,33 +457,3 @@ body {
   opacity: 1;
 }
 
-/* ---------- スマートフォン ---------- */
-
-@media (max-width: 900px) {
-  .console {
-    margin: 0;
-    border-radius: 0;
-    padding: 10px 12px;
-  }
-
-  .console-top {
-    grid-template-columns: 1fr;
-  }
-
-  .qr-row {
-    grid-template-columns: 1fr;
-  }
-
-  .console-bottom {
-    grid-template-columns: 1fr;
-  }
-
-  .pads {
-    grid-template-columns: repeat(6, 1fr);
-  }
-
-  .buttons {
-    flex-direction: row;
-    height: 64px;
-  }
-}

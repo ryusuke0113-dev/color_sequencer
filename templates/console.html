@@ -1,94 +1,94 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OZ-9 COLOR SEQUENCER &lt;console mode&gt;</title>
-    <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/console.css') }}" />
-  </head>
-  <body>
-    <div id="console" class="console">
-      <header class="console-header">
-        <span>OZ-9 COLOR SEQUENCER &lt;console mode&gt;</span>
-        <span id="status">----/--/-- --:--:--:-- PAD.-- STANDBY</span>
-      </header>
 
-      <div class="console-top">
-        <div id="palette" class="palette"></div>
-        <div id="monitors" class="monitors"></div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OZ-9 COLOR SEQUENCER &lt;console mode&gt;</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/console.css') }}" />
+</head>
+
+<body>
+  <div id="console-fit">
+  <div id="console" class="console">
+    <header class="console-header">
+      <span>OZ-9 COLOR SEQUENCER &lt;console mode&gt;</span>
+      <span id="status">----/--/-- --:--:--:-- PAD.-- STANDBY</span>
+    </header>
+
+    <div class="console-top">
+      <div id="palette" class="palette"></div>
+      <div id="monitors" class="monitors"></div>
+    </div>
+
+    <div class="qr-row" id="qr-row">
+      {% for url in audience_urls %}
+      <div class="qr-cell">
+        <a class="qr" href="{{ url }}" target="_blank" rel="noopener" data-page="{{ loop.index0 }}">
+          <img src="{{ url_for('qr_code', page=loop.index0) }}" alt="ページ{{ loop.index }}のQRコード" />
+        </a>
+        <div class="page-label">PAGE.{{ "%02d"|format(loop.index) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="console-bottom">
+      <div id="page-pads" class="page-pads"></div>
+      <div class="buttons">
         <label class="lock global-lock">
           <span>LOCK</span>
           <input id="lock" type="checkbox" />
           <span class="lock-switch"></span>
         </label>
+        <button id="run-button" class="run-button" type="button">RUN</button>
+        <button id="switch-button" class="switch-button" type="button">SWITCH</button>
       </div>
+    </div>
 
-      <div class="qr-row" id="qr-row">
+    <footer class="console-footer">
+      <span id="footer-urls">
         {% for url in audience_urls %}
-        <div class="qr-cell">
-          <a class="qr" href="{{ url }}" target="_blank" rel="noopener" data-page="{{ loop.index0 }}">
-            <img src="{{ url_for('qr_code', page=loop.index0) }}" alt="ページ{{ loop.index }}のQRコード" />
-          </a>
-          <label class="lock sw-lock">
-            <span>sw Lock</span>
-            <input type="checkbox" class="sw-lock-input" data-page="{{ loop.index0 }}" />
-            <span class="lock-switch"></span>
-          </label>
-          <div class="page-label">PAGE.{{ "%02d"|format(loop.index) }}</div>
-        </div>
+        <span>P{{ loop.index }}: {{ url }}</span>
         {% endfor %}
-      </div>
+      </span>
+      <span>{{ email }} <a href="{{ url_for('logout') }}">ログアウト</a></span>
+    </footer>
+  </div>
+  </div>
 
-      <div class="divider"></div>
-
-      <div class="console-bottom">
-        <div id="page-pads" class="page-pads"></div>
-        <div class="buttons">
-          <button id="run-button" class="run-button" type="button">RUN</button>
-          <button id="switch-button" class="switch-button" type="button">SWITCH</button>
-        </div>
-      </div>
-
-      <footer class="console-footer">
-        <span id="footer-urls">
-          {% for url in audience_urls %}
-            <span>P{{ loop.index }}: {{ url }}</span>
-          {% endfor %}
-        </span>
-        <span>{{ email }} <a href="{{ url_for('logout') }}">ログアウト</a></span>
-      </footer>
+  <div id="color-panel" class="color-panel" hidden>
+    <div id="color-preview" class="color-preview"></div>
+    <label>H <input id="slider-h" type="range" min="0" max="360" value="0" /><span id="val-h">0</span></label>
+    <label>S <input id="slider-s" type="range" min="0" max="100" value="100" /><span id="val-s">100</span></label>
+    <label>L <input id="slider-l" type="range" min="0" max="100" value="50" /><span id="val-l">50</span></label>
+    <div id="color-hex" class="color-hex">#FFFFFF</div>
+    <div class="color-actions">
+      <button type="button" data-action="cancel">キャンセル</button>
+      <button type="button" data-action="ok">確定</button>
     </div>
+  </div>
 
-    <div id="color-panel" class="color-panel" hidden>
-      <div id="color-preview" class="color-preview"></div>
-      <label>H <input id="slider-h" type="range" min="0" max="360" value="0" /><span id="val-h">0</span></label>
-      <label>S <input id="slider-s" type="range" min="0" max="100" value="100" /><span id="val-s">100</span></label>
-      <label>L <input id="slider-l" type="range" min="0" max="100" value="50" /><span id="val-l">50</span></label>
-      <div id="color-hex" class="color-hex">#FFFFFF</div>
-      <div class="color-actions">
-        <button type="button" data-action="cancel">キャンセル</button>
-        <button type="button" data-action="ok">確定</button>
-      </div>
-    </div>
+  <div id="menu" class="menu" hidden>
+    <button type="button" data-action="edit">色を編集</button>
+    <button type="button" data-action="fade-out">フェードアウト</button>
+    <button type="button" data-action="fade-in">フェードイン</button>
+    <button type="button" data-action="delete">色を削除</button>
+    <button type="button" data-action="cancel-temp">仮アサインを取り消す</button>
+  </div>
 
-    <div id="menu" class="menu" hidden>
-      <button type="button" data-action="edit">色を編集</button>
-      <button type="button" data-action="fade-out">フェードアウト</button>
-      <button type="button" data-action="fade-in">フェードイン</button>
-      <button type="button" data-action="delete">色を削除</button>
-      <button type="button" data-action="cancel-temp">仮アサインを取り消す</button>
-    </div>
+  <div id="toast" class="toast"></div>
 
-    <div id="toast" class="toast"></div>
+  <script>
+    const AUDIENCE_URLS = {{ audience_urls | tojson }};
+    const PAGE_COUNT = {{ page_count }};
+    const PAD_COUNT = {{ pad_count }};
+  </script>
+  <script src="{{ url_for('static', filename='js/sequencer.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/console.js') }}"></script>
+</body>
 
-    <script>
-      const AUDIENCE_URLS = {{ audience_urls | tojson }};
-      const PAGE_COUNT = {{ page_count }};
-      const PAD_COUNT = {{ pad_count }};
-    </script>
-    <script src="{{ url_for('static', filename='js/sequencer.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/console.js') }}"></script>
-  </body>
 </html>
