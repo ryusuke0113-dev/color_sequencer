@@ -53,16 +53,24 @@ const monitors = Array.from({ length: PAGE_COUNT }, (_, page) => {
   const monitor = document.createElement("div");
   monitor.className = "monitor smpte";
   monitor.title = `PAGE.${String(page + 1).padStart(2, "0")}`;
+  const code = document.createElement("span");
+  code.className = "monitor-code";
+  code.textContent = "SMPTE";
+  monitor.append(code);
   monitorsView.append(monitor);
-  return monitor;
+  return { monitor, code };
 });
 
 const pagePads = Array.from({ length: PAGE_COUNT }, (_, page) => {
   const row = document.createElement("div");
   row.className = "page-row";
-  const label = document.createElement("div");
-  label.className = "page-row-label";
-  label.textContent = `P${String(page + 1).padStart(2, "0")}`;
+  const lock = document.createElement("label");
+  lock.className = "lock sw-lock";
+  lock.innerHTML =
+    `<span>sw Lock</span>` +
+    `<input type="checkbox" class="sw-lock-input" data-page="${page}" />` +
+    `<span class="lock-switch"></span>` +
+    `<span class="page-row-label">P${String(page + 1).padStart(2, "0")}</span>`;
   const padsGrid = document.createElement("div");
   padsGrid.className = "pads";
   const pads = Array.from({ length: PAD_COUNT }, (_, i) => {
@@ -81,7 +89,7 @@ const pagePads = Array.from({ length: PAGE_COUNT }, (_, page) => {
     padsGrid.append(pad);
     return { pad, main, temp };
   });
-  row.append(label, padsGrid);
+  row.append(lock, padsGrid);
   pagePadsView.append(row);
   return pads;
 });
@@ -145,7 +153,7 @@ const poller = Sequencer.startPolling(
   (received) => {
     schedule = received;
     renderSchedule();
-  },
+  }
 );
 Sequencer.startClockSync();
 
@@ -264,7 +272,7 @@ function currentHexFromSliders() {
   return Sequencer.hslToHex(
     Number(sliderH.value) / 360,
     Number(sliderS.value) / 100,
-    Number(sliderL.value) / 100,
+    Number(sliderL.value) / 100
   );
 }
 
@@ -279,7 +287,9 @@ function updateColorPanelPreview() {
 
 function openColorPanel(initialValue, x, y, callback) {
   const hex =
-    initialValue && initialValue !== SMPTE ? initialValue.toUpperCase() : "#FFFFFF";
+    initialValue && initialValue !== SMPTE
+      ? initialValue.toUpperCase()
+      : "#FFFFFF";
   const { h, s, l } = Sequencer.hexToHsl(hex);
   sliderH.value = Math.round(h * 360);
   sliderS.value = Math.round(s * 100);
@@ -325,11 +335,16 @@ swatches.forEach((swatch, i) => {
         showToast("SMPTEカラーバーは編集できません");
         return;
       }
-      openColorPanel(schedule.palette[i], event.clientX, event.clientY, (value) => {
-        const palette = [...schedule.palette];
-        palette[i] = value;
-        send("/api/console/palette", { palette });
-      });
+      openColorPanel(
+        schedule.palette[i],
+        event.clientX,
+        event.clientY,
+        (value) => {
+          const palette = [...schedule.palette];
+          palette[i] = value;
+          send("/api/console/palette", { palette });
+        }
+      );
       return;
     }
     if (selected.size > 0) {
@@ -340,7 +355,7 @@ swatches.forEach((swatch, i) => {
         assign(
           page,
           items.map((t) => t.pad),
-          schedule.palette[i],
+          schedule.palette[i]
         );
       } else {
         showToast("複数ページにまたがる選択にはまとめてアサインできません");
@@ -384,7 +399,9 @@ pagePads.forEach((pads, page) => {
       pad.classList.add("drop-target");
     });
 
-    pad.addEventListener("dragleave", () => pad.classList.remove("drop-target"));
+    pad.addEventListener("dragleave", () =>
+      pad.classList.remove("drop-target")
+    );
 
     pad.addEventListener("drop", (event) => {
       event.preventDefault();
@@ -416,7 +433,8 @@ function openMenu(page, index, x, y) {
   const hasColor = canFadeColor(p.colors[index]);
   menu.querySelector('[data-action="delete"]').hidden =
     isRunning() || p.colors[index] === null;
-  menu.querySelector('[data-action="cancel-temp"]').hidden = p.temp_colors[index] === null;
+  menu.querySelector('[data-action="cancel-temp"]').hidden =
+    p.temp_colors[index] === null;
   menu.querySelector('[data-action="fade-out"]').hidden = !hasColor;
   menu.querySelector('[data-action="fade-in"]').hidden = !hasColor;
   menu.hidden = false;
@@ -447,7 +465,7 @@ menu.addEventListener("click", (event) => {
       return;
     }
     openColorPanel(current, menuPosition.x, menuPosition.y, (value) =>
-      assign(page, targets, value),
+      assign(page, targets, value)
     );
   } else if (action === "fade-out") {
     setFades(page, targets, FADE_OUT);
@@ -463,7 +481,8 @@ menu.addEventListener("click", (event) => {
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".menu")) closeMenu();
-  if (!event.target.closest(".pad, .swatch, .menu, .color-panel")) setSelection([]);
+  if (!event.target.closest(".pad, .swatch, .menu, .color-panel"))
+    setSelection([]);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -481,7 +500,7 @@ function switchBlockReason(t) {
   if (!isRunning()) return "SWITCHはRUN中だけ使えます";
   if (t < schedule.t0) return "切り替え待ちです";
   const can = schedule.pages.some(
-    (p) => !p.switch_lock && p.temp_colors.some((v) => v !== null),
+    (p) => !p.switch_lock && p.temp_colors.some((v) => v !== null)
   );
   if (!can) return "SWITCHできるページがありません";
   return null;
@@ -508,7 +527,9 @@ switchButton.addEventListener("click", () => {
     showToast(reason);
     return;
   }
-  send("/api/console/switch", { t0: Sequencer.switchStartTime(schedule.t0, t) });
+  send("/api/console/switch", {
+    t0: Sequencer.switchStartTime(schedule.t0, t),
+  });
 });
 
 lockInput.checked = localStorage.getItem(LOCK_STORAGE_KEY) === "1";
@@ -546,7 +567,9 @@ qrLinks.forEach((link) => {
     event.preventDefault();
     const page = Number(link.dataset.page);
     await copyText(AUDIENCE_URLS[page]);
-    showToast(`PAGE.${String(page + 1).padStart(2, "0")} のURLをコピーしました`);
+    showToast(
+      `PAGE.${String(page + 1).padStart(2, "0")} のURLをコピーしました`
+    );
   });
 });
 
@@ -566,7 +589,8 @@ function render() {
     if (page === 0) statusFrame = frame;
     const value = frame.kind === "standby" ? SMPTE : frame.value;
     if (value !== lastMonitorValues[page]) {
-      Sequencer.paint(monitors[page], value);
+      Sequencer.paint(monitors[page].monitor, value);
+      monitors[page].code.textContent = value === null ? "NO ASSIGN" : value;
       lastMonitorValues[page] = value;
     }
     const currentPad = frame.kind === "pad" ? frame.pad : -1;
@@ -578,7 +602,7 @@ function render() {
     }
   }
 
-  const text = Sequencer.statusText(statusFrame, t);
+  const text = Sequencer.formatClock(t);
   if (text !== lastStatus) {
     statusLine.textContent = text;
     lastStatus = text;
@@ -588,7 +612,7 @@ function render() {
   runButton.classList.toggle("running", running);
   runButton.classList.toggle(
     "blink",
-    running && statusFrame.kind === "pad" && statusFrame.step % 2 === 0,
+    running && statusFrame.kind === "pad" && statusFrame.step % 2 === 0
   );
   runButton.classList.toggle("disabled", isLocked());
 
@@ -600,7 +624,7 @@ function render() {
   switchButton.classList.toggle("pending", pending);
   switchButton.classList.toggle(
     "disabled",
-    !pending && schedule !== null && switchBlockReason(t) !== null,
+    !pending && schedule !== null && switchBlockReason(t) !== null
   );
 
   consoleView.classList.toggle("locked", isLocked());
@@ -608,3 +632,23 @@ function render() {
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
+
+const consoleFit = document.getElementById("console-fit");
+const CONSOLE_WIDTH = 1100;
+
+function fitConsole() {
+  consoleView.style.width = `${CONSOLE_WIDTH}px`;
+  consoleView.style.transform = "none";
+  const naturalHeight = consoleView.offsetHeight;
+  const scale = Math.min(
+    window.innerHeight / naturalHeight,
+    window.innerWidth / CONSOLE_WIDTH,
+  );
+  consoleFit.style.width = `${CONSOLE_WIDTH * scale}px`;
+  consoleFit.style.height = `${naturalHeight * scale}px`;
+  consoleView.style.transformOrigin = "top left";
+  consoleView.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener("resize", fitConsole);
+fitConsole();

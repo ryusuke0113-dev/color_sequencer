@@ -51,7 +51,10 @@ const Sequencer = (() => {
   }
 
   function rgbToHex(r, g, b) {
-    const to = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+    const to = (v) =>
+      Math.max(0, Math.min(255, Math.round(v)))
+        .toString(16)
+        .padStart(2, "0");
     return `#${to(r)}${to(g)}${to(b)}`.toUpperCase();
   }
 
@@ -151,7 +154,9 @@ const Sequencer = (() => {
     const base = colors[pad];
     const fade = fades[pad] || FADE_NONE;
     const value =
-      typeof base === "string" && base !== SMPTE ? applyFade(base, fade, stage) : base;
+      typeof base === "string" && base !== SMPTE
+        ? applyFade(base, fade, stage)
+        : base;
     return { kind: "pad", pad, step, stage, value, base, fade };
   }
 
@@ -210,7 +215,8 @@ const Sequencer = (() => {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `通信エラー (${response.status})`);
+    if (!response.ok)
+      throw new Error(data.error || `通信エラー (${response.status})`);
     return data;
   }
 
